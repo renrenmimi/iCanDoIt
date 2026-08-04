@@ -11,6 +11,11 @@ enum Bootstrap {
             MainActor.assumeIsolated { Snapshot.renderAll(to: dir) }
             return
         }
+        // --selftest 跑拖拽落位/迁移/统计的逻辑断言
+        if CommandLine.arguments.contains("--selftest") {
+            MainActor.assumeIsolated { SelfTest.run() }
+            return
+        }
         ICanDoItApp.main()
     }
 }
@@ -19,11 +24,14 @@ struct ICanDoItApp: App {
     var body: some Scene {
         Window("iCanDoIt", id: "main") {
             RootView()
-                .frame(width: 880, height: 640)
+                // 看板要同屏放 8 列,窗口给足宽度并允许自由缩放
+                // 最小宽度按「8 列每列至少 ~140px」定,再窄看板就挤了
+                .frame(minWidth: 1240, idealWidth: 1420, minHeight: 640, idealHeight: 800)
                 .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 1420, height: 800)
         .modelContainer(for: DayTask.self)
     }
 }

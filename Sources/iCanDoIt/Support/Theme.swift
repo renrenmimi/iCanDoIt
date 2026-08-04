@@ -187,6 +187,25 @@ struct IconButtonStyle: ButtonStyle {
     }
 }
 
+/// ScrollView 的内容在 ImageRenderer 离屏渲染下会是空白,
+/// 快照自检模式里退化成普通堆叠,好让界面能被验证
+struct MaybeScroll<Content: View>: View {
+    let axis: Axis.Set
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if Snapshot.offscreen {
+            if axis == .horizontal {
+                HStack(alignment: .top, spacing: 0) { content() }
+            } else {
+                VStack(spacing: 0) { content() }
+            }
+        } else {
+            ScrollView(axis, showsIndicators: false) { content() }
+        }
+    }
+}
+
 /// 苹果式缩放淡入:进场从 104.5% 落到位,出场缩到 96.5%,配弹簧曲线
 struct ScaleFadeModifier: ViewModifier {
     let scale: CGFloat
@@ -228,7 +247,11 @@ struct RewardChip: View {
     var body: some View {
         HStack(spacing: 4) {
             Text("🎁").font(.system(size: 10))
-            Text(text).font(.system(size: 11, weight: .medium, design: .rounded))
+            // 单行 + 尾部省略:看板窄列里不会被挤成一列竖排字母
+            Text(text)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
         .foregroundStyle(Theme.textSecondary)
         .padding(.horizontal, 8)

@@ -9,20 +9,26 @@ struct Stats {
     let doneByDay: [String: Int]
 
     static func compute(from tasks: [DayTask]) -> Stats {
+        // 热力图与连击都以「实际完成那天」为准,
+        // 这样周/月粒度的任务完成时也会正确点亮当天
         var doneByDay: [String: Int] = [:]
-        var totalByDay: [String: Int] = [:]
         var totalDone = 0
-
         for t in tasks {
-            totalByDay[t.dayKey, default: 0] += 1
-            if t.isDone {
-                doneByDay[t.dayKey, default: 0] += 1
-                totalDone += 1
-            }
+            guard let at = t.completedAt else { continue }
+            doneByDay[at.dayKey, default: 0] += 1
+            totalDone += 1
         }
 
-        let perfectDays = totalByDay.filter { key, total in
-            total > 0 && (doneByDay[key] ?? 0) == total
+        // Perfect Day:某天的日任务全部完成(周/月目标不参与判定)
+        var dayTotals: [String: Int] = [:]
+        var dayDone: [String: Int] = [:]
+        for t in tasks {
+            guard let key = BucketKey.dayValue(of: t.bucketKey) else { continue }
+            dayTotals[key, default: 0] += 1
+            if t.isDone { dayDone[key, default: 0] += 1 }
+        }
+        let perfectDays = dayTotals.filter { key, total in
+            total > 0 && dayDone[key] == total
         }.count
 
         // 有 ≥1 件完成即算「打卡日」;当前连击从今天(或昨天)往回数

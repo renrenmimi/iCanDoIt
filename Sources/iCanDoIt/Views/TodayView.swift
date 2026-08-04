@@ -6,7 +6,6 @@ struct TodayView: View {
     @Environment(\.modelContext) private var context
     var tasks: [DayTask]
     var stats: Stats
-    var onShowReview: () -> Void
 
     @State private var showCelebration = false
     @State private var showAdd = false
@@ -36,7 +35,6 @@ struct TodayView: View {
                 taskList
             }
             .padding(.horizontal, 36)
-            .padding(.top, 48)
             .padding(.bottom, 28)
 
             if showCelebration {
@@ -76,40 +74,14 @@ struct TodayView: View {
                     .legibilityShadow()
             }
             Spacer()
-            HStack(spacing: 10) {
-                if stats.currentStreak > 0 {
-                    streakChip
-                }
-                Button(action: onShowReview) {
-                    Image(systemName: "chart.bar.xaxis")
-                }
-                .buttonStyle(IconButtonStyle())
-                .help("Review & stats")
-                Button {
-                    showAdd = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(IconButtonStyle())
-                .help("Add a task")
+            Button {
+                showAdd = true
+            } label: {
+                Image(systemName: "plus")
             }
+            .buttonStyle(IconButtonStyle())
+            .help("Add a task")
         }
-    }
-
-    private var streakChip: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.amber)
-                .symbolEffect(.pulse, options: .repeating)
-            Text("\(stats.currentStreak)-day streak")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.textPrimary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Theme.amber.opacity(0.12), in: Capsule())
-        .overlay(Capsule().strokeBorder(Theme.amber.opacity(0.25), lineWidth: 1))
     }
 
     // MARK: - 进度条
@@ -159,7 +131,7 @@ struct TodayView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView(showsIndicators: false) {
+                MaybeScroll(axis: .vertical) {
                     VStack(spacing: 10) {
                         ForEach(displayTasks) { task in
                             // 「已完成」小标题跟着第一条完成任务走,
@@ -217,7 +189,10 @@ struct TodayView: View {
         guard !title.isEmpty else { return }
         let maxOrder = tasks.map(\.sortOrder).max() ?? -1
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            context.insert(DayTask(title: title, reward: reward, dayKey: Date.now.dayKey, sortOrder: maxOrder + 1))
+            context.insert(DayTask(
+                title: title, reward: reward,
+                bucketKey: BucketKey.day(.now), sortOrder: maxOrder + 1
+            ))
         }
     }
 }

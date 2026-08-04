@@ -20,16 +20,39 @@ enum Snapshot {
             exit(1)
         }
 
-        let todayKey = Date.now.dayKey
+        let todayBucket = BucketKey.day(.now)
         let sampleTasks: [DayTask] = [
-            DayTask(title: "Run 3 km", reward: "An iced americano", dayKey: todayKey, sortOrder: 0),
-            DayTask(title: "Read chapter 4 of Sapiens", reward: "", dayKey: todayKey, sortOrder: 1),
-            DayTask(title: "Call mom", reward: "One episode of my show", dayKey: todayKey, sortOrder: 2),
-            DayTask(title: "Plan next week's study", reward: "Bubble tea", dayKey: todayKey, sortOrder: 3),
+            DayTask(title: "Run 3 km", reward: "An iced americano", bucketKey: todayBucket, sortOrder: 0),
+            DayTask(title: "Read chapter 4 of Sapiens", reward: "", bucketKey: todayBucket, sortOrder: 1),
+            DayTask(title: "Call mom", reward: "One episode of my show", bucketKey: todayBucket, sortOrder: 2),
+            DayTask(title: "Plan next week's study", reward: "Bubble tea", bucketKey: todayBucket, sortOrder: 3),
         ]
         for t in sampleTasks { container.mainContext.insert(t) }
         sampleTasks[0].completedAt = .now
         sampleTasks[2].completedAt = .now
+
+        // 看板样本:本周目标 + 散落在几天里的卡片
+        let isoCal = Calendar.iso8601
+        let monday = Date.now.startOfWeek
+        var boardTasks: [DayTask] = [
+            DayTask(title: "Ship the week's report", reward: "Ramen night",
+                    bucketKey: BucketKey.week(.now), sortOrder: 0),
+            DayTask(title: "Finish Swift chapter 5", reward: "",
+                    bucketKey: BucketKey.week(.now), sortOrder: 1),
+            DayTask(title: "Read 3 books", reward: "New headphones",
+                    bucketKey: BucketKey.month(.now), sortOrder: 0),
+        ]
+        for offset in 0..<5 {
+            guard let d = isoCal.date(byAdding: .day, value: offset, to: monday) else { continue }
+            boardTasks.append(DayTask(
+                title: ["Gym", "Design review", "Grocery run", "Call grandma", "Deep work block"][offset],
+                reward: offset == 1 ? "Bubble tea" : "",
+                bucketKey: BucketKey.day(d), sortOrder: 0
+            ))
+        }
+        for t in boardTasks { container.mainContext.insert(t) }
+        boardTasks[3].completedAt = .now
+        let allBoardTasks = sampleTasks + boardTasks
 
         // 造一份半年的热力图数据
         var doneByDay: [String: Int] = [:]
@@ -47,8 +70,27 @@ enum Snapshot {
 
         save(view: MorningRitualView(onStart: { _ in }), container: container, name: "1_ritual", dir: dir)
         save(
-            view: TodayView(tasks: sampleTasks, stats: stats, onShowReview: {}),
+            view: TodayView(tasks: sampleTasks, stats: stats),
             container: container, name: "2_today", dir: dir
+        )
+        // 新增:周看板 / 月看板
+        save(
+            view: BoardView(
+                scope: .week,
+                columns: BoardLayout.weekColumns(anchor: .now),
+                tasks: allBoardTasks,
+                resolve: { uid in allBoardTasks.first { $0.uid == uid } }
+            ),
+            container: container, name: "7_board_week", dir: dir, width: 1420, height: 780
+        )
+        save(
+            view: BoardView(
+                scope: .month,
+                columns: BoardLayout.monthColumns(anchor: .now),
+                tasks: allBoardTasks,
+                resolve: { uid in allBoardTasks.first { $0.uid == uid } }
+            ),
+            container: container, name: "8_board_month", dir: dir, width: 1420, height: 780
         )
         save(view: ReviewView(stats: stats, onBack: {}), container: container, name: "3_review", dir: dir)
         save(
@@ -77,16 +119,19 @@ enum Snapshot {
         .padding(.horizontal, 36)
         save(view: rowsPreview, container: container, name: "5_rows", dir: dir)
 
-        print("✓ 已输出 6 张界面快照到 \(dir)")
+        print("✓ 已输出 8 张界面快照到 \(dir)")
         exit(0)
     }
 
-    private static func save(view: some View, container: ModelContainer, name: String, dir: String) {
+    private static func save(
+        view: some View, container: ModelContainer, name: String, dir: String,
+        width: CGFloat = 880, height: CGFloat = 640
+    ) {
         let content = ZStack {
             AppBackground()
             view
         }
-        .frame(width: 880, height: 640)
+        .frame(width: width, height: height)
         .preferredColorScheme(.dark)
         .environment(\.colorScheme, .dark)
         .modelContainer(container)
