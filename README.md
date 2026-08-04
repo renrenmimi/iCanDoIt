@@ -7,8 +7,9 @@ A tiny, pretty daily planner for macOS — write down what you want to get done 
 ## Features
 
 - 🌅 **Morning ritual** — every day starts with one question: *What do you want to get done today?*
-- 🗂 **Trello-style boards** — switch between **Today / Week / Month**. The week board is 7 day columns plus a *This Week* goals list; the month board is week columns plus *This Month* goals. Page back and forth to plan ahead.
-- ✋ **Drag & drop** — drag a card to another day to reschedule it, drop it on a card to reorder, or promote it into the week/month goals list
+- 🗂 **Boards per life track** — keep *Job hunt*, *LeetCode*, *Fitness* and whatever else on separate boards, each with its own emoji and open-task count. **All** shows everything at once.
+- 📅 **Three zoom levels** — switch between **Today / Week / Month**. The week view is 7 day columns plus a *This Week* goals list; the month view is week columns (with a daily rollup) plus *This Month* goals. Page back and forth to plan ahead.
+- ✋ **Drag & drop** — drag a card to another day to reschedule, drop it between cards to reorder, promote it into the week/month goals list, or drop it on a board chip to move it to another board
 - 🎁 **Reward yourself** — attach an optional reward to each task ("an iced americano", "one episode of my show"…)
 - 🏆 **Perfect Day** — finish everything and get a confetti celebration listing all the rewards you've earned
 - 🔥 **Streaks & stats** — current/best streak, total done, perfect days
@@ -17,6 +18,10 @@ A tiny, pretty daily planner for macOS — write down what you want to get done 
 - 💾 **Local-first** — data lives in a local SwiftData (SQLite) store; no network, no accounts
 
 ## Screenshots
+
+**Boards** — one per life track, with open-task counts. Drag a card onto a chip to move it.
+
+![Boards](docs/boards.png)
 
 **Week board** — 7 day columns plus a *This Week* goals list. Drag cards anywhere.
 

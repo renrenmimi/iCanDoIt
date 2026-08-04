@@ -13,12 +13,18 @@ enum Snapshot {
         offscreen = true
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
 
-        let schema = Schema([DayTask.self])
+        let schema = Schema([DayTask.self, Project.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         guard let container = try? ModelContainer(for: schema, configurations: [config]) else {
             fputs("无法创建内存数据库\n", stderr)
             exit(1)
         }
+
+        // 三个板,给板切换条当样本
+        let demoProject = Project(name: "General", emoji: "📥", sortOrder: 0)
+        let jobProject = Project(name: "Job hunt", emoji: "💼", sortOrder: 1)
+        let gymProject = Project(name: "Fitness", emoji: "💪", sortOrder: 2)
+        for p in [demoProject, jobProject, gymProject] { container.mainContext.insert(p) }
 
         let todayBucket = BucketKey.day(.now)
         let sampleTasks: [DayTask] = [
@@ -53,6 +59,10 @@ enum Snapshot {
         for t in boardTasks { container.mainContext.insert(t) }
         boardTasks[3].completedAt = .now
         let allBoardTasks = sampleTasks + boardTasks
+        // 分散到三个板上,好看出板切换条的计数
+        for (i, t) in allBoardTasks.enumerated() {
+            t.projectUID = [demoProject, jobProject, gymProject][i % 3].uid
+        }
 
         // 造一份半年的热力图数据
         var doneByDay: [String: Int] = [:]
@@ -79,6 +89,8 @@ enum Snapshot {
                 scope: .week,
                 columns: BoardLayout.weekColumns(anchor: .now),
                 tasks: allBoardTasks,
+                activeProjectUID: demoProject.uid,
+                projectBadges: [:],
                 resolve: { uid in allBoardTasks.first { $0.uid == uid } }
             ),
             container: container, name: "7_board_week", dir: dir, width: 1420, height: 780
@@ -88,6 +100,8 @@ enum Snapshot {
                 scope: .month,
                 columns: BoardLayout.monthColumns(anchor: .now),
                 tasks: allBoardTasks,
+                activeProjectUID: demoProject.uid,
+                projectBadges: [:],
                 resolve: { uid in allBoardTasks.first { $0.uid == uid } }
             ),
             container: container, name: "8_board_month", dir: dir, width: 1420, height: 780
@@ -119,7 +133,25 @@ enum Snapshot {
         .padding(.horizontal, 36)
         save(view: rowsPreview, container: container, name: "5_rows", dir: dir)
 
-        print("✓ 已输出 8 张界面快照到 \(dir)")
+        // 板切换条:选中态 / 未选中态 / 计数 / All
+        let bar = VStack(alignment: .leading, spacing: 18) {
+            ProjectBar(
+                projects: [demoProject, jobProject, gymProject],
+                tasks: allBoardTasks,
+                selected: .constant(nil),
+                resolve: { _ in nil }
+            )
+            ProjectBar(
+                projects: [demoProject, jobProject, gymProject],
+                tasks: allBoardTasks,
+                selected: .constant(jobProject.uid),
+                resolve: { _ in nil }
+            )
+        }
+        .padding(.horizontal, 36)
+        save(view: bar, container: container, name: "9_project_bar", dir: dir, width: 900, height: 200)
+
+        print("✓ 已输出 9 张界面快照到 \(dir)")
         exit(0)
     }
 

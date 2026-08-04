@@ -44,7 +44,7 @@ struct VisualEffectView: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
-/// 把窗口背景调成透明,让 behind-window 模糊生效;顺便允许拖拽背景移动窗口
+/// 把窗口背景调成透明,让 behind-window 模糊生效
 struct WindowChrome: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let v = NSView()
@@ -53,7 +53,9 @@ struct WindowChrome: NSViewRepresentable {
             w.isOpaque = false
             w.backgroundColor = .clear
             w.titlebarAppearsTransparent = true
-            w.isMovableByWindowBackground = true
+            // 必须关掉:开着的话 AppKit 会把卡片上的拖拽手势当成"拖窗口",
+            // 看板就没法拖卡片了。窗口仍可从顶部标题栏区域拖动。
+            w.isMovableByWindowBackground = false
             w.appearance = NSAppearance(named: .darkAqua)
         }
         return v

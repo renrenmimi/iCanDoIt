@@ -32,6 +32,6 @@ struct ICanDoItApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1420, height: 800)
-        .modelContainer(for: DayTask.self)
+        .modelContainer(for: [DayTask.self, Project.self])
     }
 }

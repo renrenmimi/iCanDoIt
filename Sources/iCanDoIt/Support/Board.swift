@@ -125,24 +125,25 @@ enum BoardMove {
         return pending + done
     }
 
-    /// 把 task 移到 bucket 列;anchor 非空表示插到它前面,为空表示追加到末尾。
+    /// 把 task 移到 bucket 列的第 index 个位置(index 为 nil 表示追加到末尾)。
     /// 抽成纯函数是为了能在 --selftest 里直接验证(拖拽手势本身没法自动化)。
     @discardableResult
     static func apply(
-        moving task: DayTask, to bucket: String, before anchor: DayTask?, all tasks: [DayTask]
+        moving task: DayTask, to bucket: String, at index: Int?, all tasks: [DayTask]
     ) -> Bool {
-        guard task.uid != anchor?.uid else { return false }
+        let current = ordered(tasks, in: bucket)
+        let siblings = current.filter { $0.uid != task.uid }
+        let insertAt = min(max(index ?? siblings.count, 0), siblings.count)
 
-        let siblings = ordered(tasks, in: bucket).filter { $0.uid != task.uid }
-        let insertAt: Int
-        if let anchor, let idx = siblings.firstIndex(where: { $0.uid == anchor.uid }) {
-            insertAt = idx
-        } else {
-            insertAt = siblings.count
+        // 原地没动就别改数据,免得白白触发一次动画和重绘
+        if task.bucketKey == bucket,
+           let now = current.firstIndex(where: { $0.uid == task.uid }),
+           now == insertAt {
+            return false
         }
 
         var reordered = siblings
-        reordered.insert(task, at: min(insertAt, reordered.count))
+        reordered.insert(task, at: insertAt)
 
         task.bucketKey = bucket
         if let day = BucketKey.dayValue(of: bucket) { task.dayKey = day }
@@ -154,9 +155,29 @@ enum BoardMove {
 // MARK: - 老数据迁移
 
 enum Migration {
-    /// 1.0 的数据只有 dayKey,这里补上 bucketKey 和 uid。幂等,可反复调用。
-    static func backfill(_ tasks: [DayTask], context: ModelContext) {
+    /// 老数据补齐:1.0 只有 dayKey;2.0 之前没有板。幂等,可反复调用。
+    /// 返回兜底的默认板(没有任何板时会创建一个)。
+    @discardableResult
+    static func backfill(
+        tasks: [DayTask], projects: [Project], context: ModelContext
+    ) -> Project {
         var touched = false
+
+        // 至少要有一个板,老任务才有地方归属
+        let sorted = projects.sorted { $0.sortOrder < $1.sortOrder }
+        let home: Project
+        if let first = sorted.first {
+            home = first
+        } else {
+            home = Project(name: Project.defaultName, emoji: Project.defaultEmoji, sortOrder: 0)
+            context.insert(home)
+            touched = true
+        }
+        if home.uid.isEmpty {
+            home.uid = UUID().uuidString
+            touched = true
+        }
+
         for t in tasks {
             if t.bucketKey.isEmpty {
                 t.bucketKey = "d:\(t.dayKey)"
@@ -166,7 +187,12 @@ enum Migration {
                 t.uid = UUID().uuidString
                 touched = true
             }
+            if t.projectUID.isEmpty {
+                t.projectUID = home.uid
+                touched = true
+            }
         }
         if touched { try? context.save() }
+        return home
     }
 }

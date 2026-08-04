@@ -9,6 +9,10 @@ struct BoardView: View {
     let scope: BoardScope
     let columns: [BoardColumn]
     let tasks: [DayTask]
+    /// 新卡片归属的板;All 模式下为第一个板
+    let activeProjectUID: String
+    /// All 模式下在卡片上显示板的标记
+    let projectBadges: [String: String]
     /// 拖拽落下时由父层解析 uid → 任务
     let resolve: (String) -> DayTask?
 
@@ -17,6 +21,8 @@ struct BoardView: View {
     @State private var draftTitle = ""
     @State private var draftReward = ""
     @FocusState private var draftFocused: Bool
+    /// 每张卡片在所属列坐标系里的纵向中点,用来算落点该插到第几个
+    @State private var cardMidY: [String: CGFloat] = [:]
 
     /// 离屏快照模式下不挂拖拽修饰符,否则 ImageRenderer 会画一堆 🚫 占位符
     private var interactive: Bool { !Snapshot.offscreen }
@@ -45,18 +51,21 @@ struct BoardView: View {
             MaybeScroll(axis: .vertical) {
                 VStack(spacing: 7) {
                     ForEach(items) { task in
-                        TaskCard(task: task, isCompact: true) {
+                        TaskCard(
+                            task: task, isCompact: true,
+                            projectBadge: projectBadges[task.projectUID]
+                        ) {
                             toggle(task)
                         } onDelete: {
                             delete(task)
                         }
                         .modifier(CardDraggable(uid: task.uid, enabled: interactive))
-                        // 落在某张卡片上 = 插到它前面
-                        .modifier(CardDropTarget(enabled: interactive, onDrop: { uids in
-                            move(uids: uids, to: column.id, before: task)
-                        }, onTarget: { over in
-                            if over { dragOverColumn = column.id }
-                        }))
+                        // 记录每张卡的纵向位置,供落点计算用
+                        .onGeometryChange(for: CGFloat.self) { proxy in
+                            proxy.frame(in: .named(column.id)).midY
+                        } action: { midY in
+                            cardMidY[task.uid] = midY
+                        }
                     }
 
                     if addingTo == column.id {
@@ -86,13 +95,13 @@ struct BoardView: View {
                     lineWidth: isOver ? 1.6 : 1
                 )
         }
-        // 落在列的空白处 = 追加到末尾
-        .modifier(CardDropTarget(enabled: interactive, onDrop: { uids in
-            move(uids: uids, to: column.id, before: nil)
+        // 整列只有这一个放置目标(嵌套目标会互相抢事件,造成落下时的卡顿)
+        .coordinateSpace(.named(column.id))
+        .modifier(CardDropTarget(enabled: interactive, onDrop: { uids, location in
+            move(uids: uids, to: column.id, at: insertIndex(in: items, dropY: location.y))
         }, onTarget: { over in
             dragOverColumn = over ? column.id : (dragOverColumn == column.id ? nil : dragOverColumn)
         }))
-        .animation(.easeOut(duration: 0.15), value: isOver)
     }
 
     private func columnHeader(_ column: BoardColumn, total: Int, done: Int) -> some View {
@@ -215,7 +224,8 @@ struct BoardView: View {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.8)) {
             context.insert(DayTask(
                 title: title, reward: draftReward.trimmed,
-                bucketKey: bucket, sortOrder: maxOrder + 1
+                bucketKey: bucket, sortOrder: maxOrder + 1,
+                projectUID: activeProjectUID
             ))
         }
         draftTitle = ""
@@ -223,21 +233,27 @@ struct BoardView: View {
         draftFocused = true   // 连续添加,不用重新点
     }
 
+    /// 鼠标落点在第几张卡片之间:落点上方的卡片数就是插入位置
+    private func insertIndex(in items: [DayTask], dropY: CGFloat) -> Int {
+        items.filter { (cardMidY[$0.uid] ?? .greatestFiniteMagnitude) < dropY }.count
+    }
+
     /// 拖拽落下:换列 + 重排序(逻辑在 BoardMove,便于自检)
-    private func move(uids: [String], to bucket: String, before anchor: DayTask?) -> Bool {
+    private func move(uids: [String], to bucket: String, at index: Int) -> Bool {
         var moved = false
         for uid in uids {
             guard let task = resolve(uid) else { continue }  // 外部拖入的乱字符串,直接忽略
-            withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
-                if BoardMove.apply(moving: task, to: bucket, before: anchor, all: tasks) {
+            // 动画要短:落下时会触发整块看板重绘,慢弹簧会被看成"卡了一下"
+            withAnimation(.easeOut(duration: 0.18)) {
+                if BoardMove.apply(moving: task, to: bucket, at: index, all: tasks) {
                     moved = true
                 }
             }
         }
         if moved {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
-            dragOverColumn = nil
         }
+        dragOverColumn = nil
         return moved
     }
 
@@ -275,13 +291,14 @@ private struct CardDraggable: ViewModifier {
 
 private struct CardDropTarget: ViewModifier {
     let enabled: Bool
-    let onDrop: ([String]) -> Bool
+    /// 第二个参数是落点(在被修饰视图的本地坐标系里)
+    let onDrop: ([String], CGPoint) -> Bool
     let onTarget: (Bool) -> Void
 
     func body(content: Content) -> some View {
         if enabled {
-            content.dropDestination(for: String.self) { uids, _ in
-                onDrop(uids)
+            content.dropDestination(for: String.self) { uids, location in
+                onDrop(uids, location)
             } isTargeted: { over in
                 onTarget(over)
             }
@@ -296,6 +313,8 @@ private struct CardDropTarget: ViewModifier {
 struct TaskCard: View {
     let task: DayTask
     var isCompact: Bool = false
+    /// All 模式下显示这张卡属于哪个板(单板模式传 nil)
+    var projectBadge: String?
     var onToggle: () -> Void
     var onDelete: () -> Void
 
@@ -322,6 +341,12 @@ struct TaskCard: View {
             .help(task.isDone ? "Mark as not done" : "Mark as done")
 
             VStack(alignment: .leading, spacing: 5) {
+                if let projectBadge {
+                    Text(projectBadge)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                }
                 Text(task.title)
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(task.isDone ? Theme.textSecondary : Theme.textPrimary)

@@ -8,16 +8,35 @@ enum Screen {
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \DayTask.sortOrder) private var allTasks: [DayTask]
+    @Query(sort: \Project.sortOrder) private var projects: [Project]
 
     @State private var screen: Screen = .ritual
     @State private var scope: BoardScope = .today
     /// 当前浏览的周/月里的任意一天,用来翻页
     @State private var anchor: Date = .now
+    /// 当前选中的板;nil = All(跨板汇总)
+    @State private var project: String?
     @State private var decided = false
 
     private var todayBucket: String { BucketKey.day(.now) }
-    private var todayTasks: [DayTask] { allTasks.filter { $0.bucketKey == todayBucket } }
+
+    /// 当前板筛选后的任务(All 模式下是全部)
+    private var visibleTasks: [DayTask] {
+        guard let project else { return allTasks }
+        return allTasks.filter { $0.projectUID == project }
+    }
+    private var todayTasks: [DayTask] { visibleTasks.filter { $0.bucketKey == todayBucket } }
+    /// 统计始终是跨板的:连击就是连击,不该被切板改变
     private var stats: Stats { Stats.compute(from: allTasks) }
+
+    private var activeProjectUID: String {
+        project ?? projects.first?.uid ?? ""
+    }
+    /// All 模式下才在卡片上标出板名
+    private var projectBadges: [String: String] {
+        guard project == nil, projects.count > 1 else { return [:] }
+        return Dictionary(uniqueKeysWithValues: projects.map { ($0.uid, "\($0.emoji) \($0.name)") })
+    }
 
     private var columns: [BoardColumn] {
         scope == .week
@@ -36,7 +55,7 @@ struct RootView: View {
                         .transition(.appleZoom)
 
                 case .board:
-                    VStack(spacing: 18) {
+                    VStack(spacing: 14) {
                         TopBar(
                             scope: $scope,
                             anchor: $anchor,
@@ -50,13 +69,26 @@ struct RootView: View {
                         .padding(.horizontal, 36)
                         .padding(.top, 34)
 
+                        ProjectBar(
+                            projects: projects,
+                            tasks: allTasks,
+                            selected: $project,
+                            resolve: resolve
+                        )
+                        .padding(.horizontal, 36)
+
                         if scope == .today {
-                            TodayView(tasks: todayTasks, stats: stats)
+                            TodayView(
+                                tasks: todayTasks, stats: stats,
+                                activeProjectUID: activeProjectUID
+                            )
                         } else {
                             BoardView(
                                 scope: scope,
                                 columns: columns,
-                                tasks: allTasks,
+                                tasks: visibleTasks,
+                                activeProjectUID: activeProjectUID,
+                                projectBadges: projectBadges,
                                 resolve: resolve
                             )
                         }
@@ -76,7 +108,7 @@ struct RootView: View {
         .onAppear {
             guard !decided else { return }
             decided = true
-            Migration.backfill(allTasks, context: context)
+            Migration.backfill(tasks: allTasks, projects: projects, context: context)
             screen = todayTasks.isEmpty ? .ritual : .board
         }
     }
@@ -87,10 +119,13 @@ struct RootView: View {
     }
 
     private func startDay(_ drafts: [TaskDraft]) {
+        // 晨间仪式可能发生在第一次启动、板还没建出来的时刻
+        let home = Migration.backfill(tasks: allTasks, projects: projects, context: context)
         for (i, d) in drafts.enumerated() {
             context.insert(DayTask(
                 title: d.title, reward: d.reward,
-                bucketKey: todayBucket, sortOrder: i
+                bucketKey: todayBucket, sortOrder: i,
+                projectUID: project ?? home.uid
             ))
         }
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { screen = .board }

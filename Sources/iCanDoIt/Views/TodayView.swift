@@ -6,6 +6,8 @@ struct TodayView: View {
     @Environment(\.modelContext) private var context
     var tasks: [DayTask]
     var stats: Stats
+    /// 在 Today 页新建的任务归到哪个板
+    var activeProjectUID: String = ""
 
     @State private var showCelebration = false
     @State private var showAdd = false
@@ -191,7 +193,8 @@ struct TodayView: View {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             context.insert(DayTask(
                 title: title, reward: reward,
-                bucketKey: BucketKey.day(.now), sortOrder: maxOrder + 1
+                bucketKey: BucketKey.day(.now), sortOrder: maxOrder + 1,
+                projectUID: activeProjectUID
             ))
         }
     }

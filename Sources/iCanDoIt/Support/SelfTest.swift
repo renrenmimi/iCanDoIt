@@ -6,7 +6,7 @@ import SwiftData
 @MainActor
 enum SelfTest {
     static func run() {
-        let schema = Schema([DayTask.self])
+        let schema = Schema([DayTask.self, Project.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         guard let container = try? ModelContainer(for: schema, configurations: [config]) else {
             fputs("无法创建内存数据库\n", stderr)
@@ -41,8 +41,8 @@ enum SelfTest {
 
         print("拖拽落位自检:")
 
-        // 1. 跨列拖动:C 从周一拖到周二
-        BoardMove.apply(moving: c, to: tuesday, before: nil, all: all)
+        // 1. 跨列拖动:C 从周一拖到周二(末尾)
+        BoardMove.apply(moving: c, to: tuesday, at: nil, all: all)
         check("跨列拖动改变所属列", c.bucketKey == tuesday, "得到 \(c.bucketKey)")
         check("跨列拖动同步旧 dayKey 字段",
               c.dayKey == BucketKey.dayValue(of: tuesday), "得到 \(c.dayKey)")
@@ -50,25 +50,35 @@ enum SelfTest {
               BoardMove.ordered(all, in: monday).map(\.title) == ["A", "B"],
               "得到 \(BoardMove.ordered(all, in: monday).map(\.title))")
 
-        // 2. 列内重排:把 B 插到 A 前面
-        BoardMove.apply(moving: b, to: monday, before: a, all: all)
+        // 2. 列内重排:把 B 插到第 0 位
+        BoardMove.apply(moving: b, to: monday, at: 0, all: all)
         check("列内重排后顺序为 B、A",
               BoardMove.ordered(all, in: monday).map(\.title) == ["B", "A"],
               "得到 \(BoardMove.ordered(all, in: monday).map(\.title))")
 
-        // 3. 拖到自己身上应当无操作
-        let before = b.sortOrder
-        let noop = BoardMove.apply(moving: b, to: monday, before: b, all: all)
-        check("拖到自己身上不产生变化", noop == false && b.sortOrder == before)
+        // 3. 落回原位应当无操作(避免白白重绘)
+        let noop = BoardMove.apply(moving: b, to: monday, at: 0, all: all)
+        check("落回原位不产生变化", noop == false)
 
-        // 4. 已完成的卡片沉底
+        // 4. 插到末尾:B 从 0 移到 1
+        BoardMove.apply(moving: b, to: monday, at: 1, all: all)
+        check("插到末尾后顺序为 A、B",
+              BoardMove.ordered(all, in: monday).map(\.title) == ["A", "B"],
+              "得到 \(BoardMove.ordered(all, in: monday).map(\.title))")
+
+        // 5. 越界的落点要被夹住,不能崩
+        BoardMove.apply(moving: b, to: monday, at: 999, all: all)
+        check("越界落点被夹到合法范围",
+              BoardMove.ordered(all, in: monday).count == 2)
+
+        // 6. 已完成的卡片沉底(A 完成后应排到 B 后面)
         a.completedAt = .now
         check("完成的卡片排到列尾",
               BoardMove.ordered(all, in: monday).map(\.title) == ["B", "A"],
               "得到 \(BoardMove.ordered(all, in: monday).map(\.title))")
 
-        // 5. 日任务拖进「本周目标」列
-        BoardMove.apply(moving: b, to: weekBucket, before: nil, all: all)
+        // 7. 日任务拖进「本周目标」列
+        BoardMove.apply(moving: b, to: weekBucket, at: nil, all: all)
         check("能拖进周目标列", b.bucketKey == weekBucket, "得到 \(b.bucketKey)")
 
         // 周/月目标不是"某一天"的任务,完成它不该凭空多出一个 Perfect Day
@@ -78,24 +88,43 @@ enum SelfTest {
               Stats.compute(from: all).perfectDays == perfectBefore,
               "\(perfectBefore) → \(Stats.compute(from: all).perfectDays)")
 
-        // 6. 老数据迁移:只有 dayKey 的行要补出 bucketKey 和 uid
+        // 8. 老数据迁移:只有 dayKey 的行要补出 bucketKey / uid / 板
         let legacy = DayTask(title: "legacy", reward: "", bucketKey: monday, sortOrder: 0)
         legacy.bucketKey = ""
         legacy.uid = ""
+        legacy.projectUID = ""
         legacy.dayKey = "2026-01-15"
         ctx.insert(legacy)
         all.append(legacy)
-        Migration.backfill(all, context: ctx)
+
+        let home = Migration.backfill(tasks: all, projects: [], context: ctx)
+        check("没有板时迁移会创建默认板", home.name == Project.defaultName, "得到 \(home.name)")
         check("迁移补出 bucketKey", legacy.bucketKey == "d:2026-01-15", "得到 \(legacy.bucketKey)")
         check("迁移补出 uid", !legacy.uid.isEmpty)
+        check("迁移把老任务归到默认板", legacy.projectUID == home.uid)
+        check("所有任务都有归属板", all.allSatisfy { !$0.projectUID.isEmpty })
 
-        // 7. 热力图按「实际完成日」计数(此时 a 和 b 都是今天完成的)
+        // 9. 迁移是幂等的:再跑一次不该新建板、也不该改动已有归属
+        let uidBefore = legacy.projectUID
+        let home2 = Migration.backfill(tasks: all, projects: [home], context: ctx)
+        check("重复迁移复用已有板", home2.uid == home.uid && legacy.projectUID == uidBefore)
+
+        // 10. 板筛选:换板后另一个板看不到这张卡
+        let other = Project(name: "Job hunt", emoji: "💼", sortOrder: 1)
+        ctx.insert(other)
+        legacy.projectUID = other.uid
+        check("按板筛选只留下该板的卡",
+              all.filter { $0.projectUID == other.uid }.map(\.title) == ["legacy"],
+              "得到 \(all.filter { $0.projectUID == other.uid }.map(\.title))")
+        check("换板不影响任务所在的列", legacy.bucketKey == "d:2026-01-15")
+
+        // 11. 热力图按「实际完成日」计数(此时 a 和 b 都是今天完成的)
         let stats = Stats.compute(from: all)
         check("完成计数取自 completedAt",
               stats.doneByDay[Date.now.dayKey] == 2,
               "得到 \(stats.doneByDay[Date.now.dayKey] ?? -1)")
 
-        // 8. 列生成
+        // 12. 列生成
         let weekCols = BoardLayout.weekColumns(anchor: .now)
         check("周视图 = 目标列 + 7 天", weekCols.count == 8, "得到 \(weekCols.count)")
         check("周视图有且仅有一列标记今天",

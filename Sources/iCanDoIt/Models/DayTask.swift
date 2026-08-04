@@ -9,16 +9,19 @@ final class DayTask {
     var dayKey: String
     /// 任务所在的「列」——看板的核心。格式见 BucketKey
     var bucketKey: String = ""
+    /// 所属的板(Project.uid)。空串表示还没分配,由迁移兜底
+    var projectUID: String = ""
     /// 拖拽时用的稳定标识(PersistentIdentifier 不便直接当拖拽载荷)
     var uid: String = ""
     var createdAt: Date
     var completedAt: Date?
     var sortOrder: Int
 
-    init(title: String, reward: String, bucketKey: String, sortOrder: Int) {
+    init(title: String, reward: String, bucketKey: String, sortOrder: Int, projectUID: String = "") {
         self.title = title
         self.reward = reward
         self.bucketKey = bucketKey
+        self.projectUID = projectUID
         self.uid = UUID().uuidString
         // 兼容旧字段:日任务写日期,周/月任务写创建当天
         self.dayKey = BucketKey.dayValue(of: bucketKey) ?? Date.now.dayKey
