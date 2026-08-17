@@ -2,8 +2,6 @@
 
 A tiny, pretty daily planner for macOS — write down what you want to get done today, attach a little reward to each task, and celebrate when you finish everything.
 
-一个小而美的 macOS 每日计划 App:每天写下想完成的事,给每件事绑一个"完成后的小奖励",全部做完时收获彩带与领奖仪式。
-
 ## Features
 
 - 🌅 **Morning ritual** — every day starts with one question: *What do you want to get done today?*
