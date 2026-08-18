@@ -11,7 +11,7 @@ A daily planner for macOS — write down what you want to get done today, attach
 - **Reward yourself** — attach an optional reward to each task ("an iced americano", "one episode of my show"…)
 - **Perfect Day** — finish everything and get a confetti celebration listing all the rewards you've earned
 - **Streaks & stats** — current/best streak, total done, perfect days
-- **Consistency map** — a GitHub-style heatmap of your last 6 months, with instant custom hover tooltips
+- **Consistency map** — a GitHub-style heatmap of your last 6 months, with custom hover tooltips
 - **Window appearance** — behind-window frosted glass via `NSVisualEffectView`, an animated aurora background, trackpad haptics
 - **Local-first** — data lives in a local SwiftData (SQLite) store; no network, no accounts
 
@@ -44,7 +44,7 @@ Requires Xcode (tested with Xcode 26 / Swift 6.3, macOS 15+).
 cp -R build/iCanDoIt.app /Applications/
 ```
 
-No Xcode project needed — it's a plain Swift Package (SwiftUI + SwiftData) with a small packaging script.
+Builds as a plain Swift Package (SwiftUI + SwiftData) with a packaging script.
 
 ### Dev self-check modes
 
