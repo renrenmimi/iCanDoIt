@@ -71,3 +71,6 @@ The second asserts the logic that a screenshot can't prove — drag-and-drop pla
 ---
 
 Built with [Claude Code](https://claude.com/claude-code) 🤖
+
+© 2026 Weiren Feng. All rights reserved. Published for reading and portfolio purposes; not
+licensed for reuse, modification, or redistribution.
