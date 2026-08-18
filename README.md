@@ -1,6 +1,6 @@
 # iCanDoIt ✅
 
-A tiny, pretty daily planner for macOS — write down what you want to get done today, attach a little reward to each task, and celebrate when you finish everything.
+A daily planner for macOS — write down what you want to get done today, attach a little reward to each task, and celebrate when you finish everything.
 
 ## Features
 
@@ -62,10 +62,10 @@ The second asserts the logic that a screenshot can't prove — drag-and-drop pla
 
 ## Tech notes
 
-- **SwiftUI + SwiftData**, zero third-party dependencies
+- **SwiftUI + SwiftData** — a plain Swift package, no `.xcodeproj`
 - Frosted glass via `NSVisualEffectView` (`.fullScreenUI`, behind-window) with a thin tint so the desktop shows through
 - Confetti is a pure-SwiftUI `Canvas` particle system
-- The heatmap flattens its 182 shadowed cells into one GPU texture (`drawingGroup`) so screen transitions stay buttery
+- The heatmap flattens its 182 shadowed cells into one GPU texture (`drawingGroup`) so screen transitions don't drop frames
 - Icon is generated programmatically by `scripts/make_icon.swift`
 
 ---
