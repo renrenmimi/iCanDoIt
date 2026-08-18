@@ -1,19 +1,19 @@
-# iCanDoIt ✅
+# iCanDoIt
 
 A daily planner for macOS — write down what you want to get done today, attach a little reward to each task, and celebrate when you finish everything.
 
 ## Features
 
-- 🌅 **Morning ritual** — every day starts with one question: *What do you want to get done today?*
-- 🗂 **Boards per life track** — keep *Job hunt*, *LeetCode*, *Fitness* and whatever else on separate boards, each with its own emoji and open-task count. **All** shows everything at once.
-- 📅 **Three zoom levels** — switch between **Today / Week / Month**. The week view is 7 day columns plus a *This Week* goals list; the month view is week columns (with a daily rollup) plus *This Month* goals. Page back and forth to plan ahead.
-- ✋ **Drag & drop** — drag a card to another day to reschedule, drop it between cards to reorder, promote it into the week/month goals list, or drop it on a board chip to move it to another board
-- 🎁 **Reward yourself** — attach an optional reward to each task ("an iced americano", "one episode of my show"…)
-- 🏆 **Perfect Day** — finish everything and get a confetti celebration listing all the rewards you've earned
-- 🔥 **Streaks & stats** — current/best streak, total done, perfect days
-- 🗺 **Consistency map** — a GitHub-style heatmap of your last 6 months, with instant custom hover tooltips
-- 🪟 **Glass everything** — real behind-window frosted glass, drifting aurora glow, springy Apple-flavored animations, trackpad haptics
-- 💾 **Local-first** — data lives in a local SwiftData (SQLite) store; no network, no accounts
+- **Morning ritual** — every day starts with one question: *What do you want to get done today?*
+- **Boards per life track** — keep *Job hunt*, *LeetCode*, *Fitness* and whatever else on separate boards, each with its own emoji and open-task count. **All** shows everything at once.
+- **Three zoom levels** — switch between **Today / Week / Month**. The week view is 7 day columns plus a *This Week* goals list; the month view is week columns (with a daily rollup) plus *This Month* goals. Page back and forth to plan ahead.
+- **Drag & drop** — drag a card to another day to reschedule, drop it between cards to reorder, promote it into the week/month goals list, or drop it on a board chip to move it to another board
+- **Reward yourself** — attach an optional reward to each task ("an iced americano", "one episode of my show"…)
+- **Perfect Day** — finish everything and get a confetti celebration listing all the rewards you've earned
+- **Streaks & stats** — current/best streak, total done, perfect days
+- **Consistency map** — a GitHub-style heatmap of your last 6 months, with instant custom hover tooltips
+- **Window appearance** — behind-window frosted glass via `NSVisualEffectView`, an animated aurora background, trackpad haptics
+- **Local-first** — data lives in a local SwiftData (SQLite) store; no network, no accounts
 
 ## Screenshots
 
