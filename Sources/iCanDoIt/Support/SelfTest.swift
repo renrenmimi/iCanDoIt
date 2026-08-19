@@ -118,13 +118,63 @@ enum SelfTest {
               "得到 \(all.filter { $0.projectUID == other.uid }.map(\.title))")
         check("换板不影响任务所在的列", legacy.bucketKey == "d:2026-01-15")
 
-        // 11. 热力图按「实际完成日」计数(此时 a 和 b 都是今天完成的)
+        // 11. 加急标记:只是标记,不能打乱手动排的顺序
+        let u1 = DayTask(title: "U1", reward: "", bucketKey: tuesday, sortOrder: 0)
+        let u2 = DayTask(title: "U2", reward: "", bucketKey: tuesday, sortOrder: 1)
+        for t in [u1, u2] { ctx.insert(t) }
+        all += [u1, u2]
+        check("新任务默认不加急", u1.isUrgent == false)
+        u2.isUrgent = true
+        check("加急不改变列内顺序",
+              BoardMove.ordered(all, in: tuesday).map(\.title) == ["C", "U1", "U2"],
+              "得到 \(BoardMove.ordered(all, in: tuesday).map(\.title))")
+        // 加急的卡照样能拖
+        BoardMove.apply(moving: u2, to: tuesday, at: 0, all: all)
+        check("加急的卡可以拖到最前",
+              BoardMove.ordered(all, in: tuesday).first?.title == "U2",
+              "得到 \(BoardMove.ordered(all, in: tuesday).map(\.title))")
+        check("拖动不会丢掉加急标记", u2.isUrgent)
+
+        // 12. 编辑任务:改标题/奖励/加急不应影响所在列与顺序
+        let bucketBefore = u2.bucketKey
+        let orderBefore = u2.sortOrder
+        u2.title = "U2 edited"
+        u2.reward = "Coffee"
+        u2.isUrgent = false
+        check("编辑不改变所在列和顺序",
+              u2.bucketKey == bucketBefore && u2.sortOrder == orderBefore)
+        check("编辑后内容已更新",
+              u2.title == "U2 edited" && u2.reward == "Coffee" && !u2.isUrgent)
+
+        // 13. 热力图按「实际完成日」计数(此时 a 和 b 都是今天完成的)
         let stats = Stats.compute(from: all)
         check("完成计数取自 completedAt",
               stats.doneByDay[Date.now.dayKey] == 2,
               "得到 \(stats.doneByDay[Date.now.dayKey] ?? -1)")
 
-        // 12. 列生成
+        // 14. 拖拽看门狗:鼠标没按下时,应当把指示线收起来
+        //     (自检运行时左键本来就是松开的,正好覆盖"拖拽被取消"这一路)
+        func spinRunLoop(until done: () -> Bool, timeout: TimeInterval) {
+            let deadline = Date().addingTimeInterval(timeout)
+            while !done() && Date() < deadline {
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+            }
+        }
+
+        var cleared = false
+        let watchdog = DragWatchdog()
+        watchdog.begin { cleared = true }
+        spinRunLoop(until: { cleared }, timeout: 1.5)
+        check("看门狗在拖拽结束后收起指示线", cleared)
+
+        var clearedAfterCancel = false
+        let watchdog2 = DragWatchdog()
+        watchdog2.begin { clearedAfterCancel = true }
+        watchdog2.cancel()
+        spinRunLoop(until: { clearedAfterCancel }, timeout: 0.5)
+        check("取消看门狗后不再回调", clearedAfterCancel == false)
+
+        // 15. 列生成
         let weekCols = BoardLayout.weekColumns(anchor: .now)
         check("周视图 = 目标列 + 7 天", weekCols.count == 8, "得到 \(weekCols.count)")
         check("周视图有且仅有一列标记今天",

@@ -21,6 +21,9 @@ enum Bootstrap {
 }
 
 struct ICanDoItApp: App {
+    /// --uitest:用内存数据库 + 样本数据跑,好在不碰真实数据的前提下测交互
+    static let uiTest = CommandLine.arguments.contains("--uitest")
+
     var body: some Scene {
         Window("iCanDoIt", id: "main") {
             RootView()
@@ -32,6 +35,6 @@ struct ICanDoItApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1420, height: 800)
-        .modelContainer(for: [DayTask.self, Project.self])
+        .modelContainer(for: [DayTask.self, Project.self], inMemory: Self.uiTest)
     }
 }

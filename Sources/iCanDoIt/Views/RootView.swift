@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SwiftData
 
@@ -16,6 +17,8 @@ struct RootView: View {
     @State private var anchor: Date = .now
     /// 当前选中的板;nil = All(跨板汇总)
     @State private var project: String?
+    /// 正在被拖的卡片 uid:看板、Today、板切换条三处共用
+    @State private var draggingUID: String?
     @State private var decided = false
 
     private var todayBucket: String { BucketKey.day(.now) }
@@ -73,6 +76,7 @@ struct RootView: View {
                             projects: projects,
                             tasks: allTasks,
                             selected: $project,
+                            draggingUID: $draggingUID,
                             resolve: resolve
                         )
                         .padding(.horizontal, 36)
@@ -80,7 +84,8 @@ struct RootView: View {
                         if scope == .today {
                             TodayView(
                                 tasks: todayTasks, stats: stats,
-                                activeProjectUID: activeProjectUID
+                                activeProjectUID: activeProjectUID,
+                                draggingUID: $draggingUID
                             )
                         } else {
                             BoardView(
@@ -89,6 +94,7 @@ struct RootView: View {
                                 tasks: visibleTasks,
                                 activeProjectUID: activeProjectUID,
                                 projectBadges: projectBadges,
+                                draggingUID: $draggingUID,
                                 resolve: resolve
                             )
                         }
@@ -108,7 +114,14 @@ struct RootView: View {
         .onAppear {
             guard !decided else { return }
             decided = true
-            Migration.backfill(tasks: allTasks, projects: projects, context: context)
+            let home = Migration.backfill(tasks: allTasks, projects: projects, context: context)
+            if ICanDoItApp.uiTest {
+                if allTasks.isEmpty { seedUITestData(home: home) }
+                screen = .board   // 播种后 @Query 还没刷新,直接进看板别停在仪式页
+                // 自己抢到前台,免得靠 AppleScript 按名字激活(那会误启动已安装的正式版)
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                return
+            }
             screen = todayTasks.isEmpty ? .ritual : .board
         }
     }
@@ -116,6 +129,17 @@ struct RootView: View {
     /// 拖拽载荷是 uid 字符串,这里换回任务对象
     private func resolve(_ uid: String) -> DayTask? {
         allTasks.first { $0.uid == uid }
+    }
+
+    /// --uitest 模式的样本数据(内存库,不落盘)
+    private func seedUITestData(home: Project) {
+        let titles = ["Alpha task", "Beta task", "Gamma task"]
+        for (i, t) in titles.enumerated() {
+            context.insert(DayTask(
+                title: t, reward: i == 0 ? "Coffee" : "",
+                bucketKey: todayBucket, sortOrder: i, projectUID: home.uid
+            ))
+        }
     }
 
     private func startDay(_ drafts: [TaskDraft]) {

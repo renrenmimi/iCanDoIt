@@ -9,6 +9,7 @@ enum Theme {
     static let electricBlue = Color(red: 0.20, green: 0.45, blue: 0.95)
     static let mint = Color(red: 0.30, green: 0.87, blue: 0.68)
     static let amber = Color(red: 1.00, green: 0.72, blue: 0.30)
+    static let urgent = Color(red: 0.99, green: 0.36, blue: 0.38)
     static let textPrimary = Color.white.opacity(0.94)
     static let textSecondary = Color.white.opacity(0.55)
 

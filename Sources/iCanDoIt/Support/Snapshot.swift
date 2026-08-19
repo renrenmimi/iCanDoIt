@@ -58,6 +58,10 @@ enum Snapshot {
         }
         for t in boardTasks { container.mainContext.insert(t) }
         boardTasks[3].completedAt = .now
+        // 标几个加急,好检查视觉
+        boardTasks[0].isUrgent = true
+        boardTasks[4].isUrgent = true
+        sampleTasks[1].isUrgent = true
         let allBoardTasks = sampleTasks + boardTasks
         // 分散到三个板上,好看出板切换条的计数
         for (i, t) in allBoardTasks.enumerated() {
@@ -80,7 +84,7 @@ enum Snapshot {
 
         save(view: MorningRitualView(onStart: { _ in }), container: container, name: "1_ritual", dir: dir)
         save(
-            view: TodayView(tasks: sampleTasks, stats: stats),
+            view: TodayView(tasks: sampleTasks, stats: stats, draggingUID: .constant(nil)),
             container: container, name: "2_today", dir: dir
         )
         // 新增:周看板 / 月看板
@@ -91,7 +95,9 @@ enum Snapshot {
                 tasks: allBoardTasks,
                 activeProjectUID: demoProject.uid,
                 projectBadges: [:],
-                resolve: { uid in allBoardTasks.first { $0.uid == uid } }
+                draggingUID: .constant(nil),
+                resolve: { uid in allBoardTasks.first { $0.uid == uid } },
+                debugSlot: DropSlot(column: BucketKey.day(.now), index: 1)
             ),
             container: container, name: "7_board_week", dir: dir, width: 1420, height: 780
         )
@@ -102,6 +108,7 @@ enum Snapshot {
                 tasks: allBoardTasks,
                 activeProjectUID: demoProject.uid,
                 projectBadges: [:],
+                draggingUID: .constant(nil),
                 resolve: { uid in allBoardTasks.first { $0.uid == uid } }
             ),
             container: container, name: "8_board_month", dir: dir, width: 1420, height: 780
@@ -123,11 +130,11 @@ enum Snapshot {
         let finishedSample = sampleTasks.filter(\.isDone)
         let rowsPreview = VStack(alignment: .leading, spacing: 10) {
             ForEach(pendingSample, id: \.persistentModelID) { t in
-                TaskRow(task: t, onToggle: {}, onDelete: {})
+                TaskRow(task: t, onToggle: {}, onDelete: {}, onEdit: {})
             }
             FinishedHeader(count: finishedSample.count)
             ForEach(finishedSample, id: \.persistentModelID) { t in
-                TaskRow(task: t, onToggle: {}, onDelete: {})
+                TaskRow(task: t, onToggle: {}, onDelete: {}, onEdit: {})
             }
         }
         .padding(.horizontal, 36)
@@ -139,19 +146,31 @@ enum Snapshot {
                 projects: [demoProject, jobProject, gymProject],
                 tasks: allBoardTasks,
                 selected: .constant(nil),
+                draggingUID: .constant(nil),
                 resolve: { _ in nil }
             )
             ProjectBar(
                 projects: [demoProject, jobProject, gymProject],
                 tasks: allBoardTasks,
                 selected: .constant(jobProject.uid),
+                draggingUID: .constant(nil),
                 resolve: { _ in nil }
             )
         }
         .padding(.horizontal, 36)
         save(view: bar, container: container, name: "9_project_bar", dir: dir, width: 900, height: 200)
 
-        print("✓ 已输出 9 张界面快照到 \(dir)")
+        // 编辑面板(含加急开关的开/关两态)
+        save(
+            view: TaskEditorSheet(task: sampleTasks[1], onSave: { _, _, _ in }, onDelete: {}),
+            container: container, name: "10_editor_urgent", dir: dir, width: 470, height: 400
+        )
+        save(
+            view: TaskEditorSheet(task: sampleTasks[0], onSave: { _, _, _ in }, onDelete: {}),
+            container: container, name: "11_editor_normal", dir: dir, width: 470, height: 400
+        )
+
+        print("✓ 已输出 11 张界面快照到 \(dir)")
         exit(0)
     }
 
