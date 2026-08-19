@@ -7,7 +7,9 @@ A daily planner for macOS — write down what you want to get done today, attach
 - **Morning ritual** — every day starts with one question: *What do you want to get done today?*
 - **Boards per life track** — keep *Job hunt*, *LeetCode*, *Fitness* and whatever else on separate boards, each with its own emoji and open-task count. **All** shows everything at once.
 - **Three zoom levels** — switch between **Today / Week / Month**. The week view is 7 day columns plus a *This Week* goals list; the month view is week columns (with a daily rollup) plus *This Month* goals. Page back and forth to plan ahead.
-- **Drag & drop** — drag a card to another day to reschedule, drop it between cards to reorder, promote it into the week/month goals list, or drop it on a board chip to move it to another board
+- **Drag & drop** — drag a card to another day to reschedule, drop it between cards to reorder, promote it into the week/month goals list, or drop it on a board chip to move it to another board. Today's list supports precise drag reordering too.
+- **Editable tasks** — double-click any card or row to change its title, reward, and urgency
+- **Urgent flag** — flagged cards get a red edge and badge without overriding your manual ordering
 - **Reward yourself** — attach an optional reward to each task ("an iced americano", "one episode of my show"…)
 - **Perfect Day** — finish everything and get a confetti celebration listing all the rewards you've earned
 - **Streaks & stats** — current/best streak, total done, perfect days
