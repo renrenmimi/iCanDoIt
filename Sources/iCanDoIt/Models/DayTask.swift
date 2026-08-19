@@ -11,6 +11,8 @@ final class DayTask {
     var bucketKey: String = ""
     /// 所属的板(Project.uid)。空串表示还没分配,由迁移兜底
     var projectUID: String = ""
+    /// 加急标记。只影响视觉,不自动排序——否则会和手动拖拽的顺序打架
+    var isUrgent: Bool = false
     /// 拖拽时用的稳定标识(PersistentIdentifier 不便直接当拖拽载荷)
     var uid: String = ""
     var createdAt: Date

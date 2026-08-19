@@ -1,3 +1,4 @@
+import UniformTypeIdentifiers
 import SwiftUI
 import SwiftData
 
@@ -8,6 +9,8 @@ struct ProjectBar: View {
     let projects: [Project]
     let tasks: [DayTask]
     @Binding var selected: String?     // nil = All
+    /// 正在被拖的卡片 uid(由 RootView 持有)
+    @Binding var draggingUID: String?
     /// 拖拽落到板胶囊上 = 把任务移到那个板
     let resolve: (String) -> DayTask?
 
@@ -102,22 +105,19 @@ struct ProjectBar: View {
         .buttonStyle(.plain)
         .modifier(ProjectDropTarget(
             enabled: id != nil && !Snapshot.offscreen,
-            onDrop: { uids in moveToProject(uids, projectUID: id) },
+            onDrop: { moveToProject(projectUID: id) },
             onTarget: { over in dropTarget = over ? id : nil }
         ))
         .help(id == nil ? "Everything across boards" : "Drag a card here to move it to \(name)")
     }
 
-    private func moveToProject(_ uids: [String], projectUID: String?) -> Bool {
-        guard let projectUID else { return false }
-        var moved = false
-        for uid in uids {
-            guard let task = resolve(uid), task.projectUID != projectUID else { continue }
-            withAnimation(.easeOut(duration: 0.2)) { task.projectUID = projectUID }
-            moved = true
-        }
-        if moved { dropTarget = nil }
-        return moved
+    private func moveToProject(projectUID: String?) -> Bool {
+        guard let projectUID, let uid = draggingUID, let task = resolve(uid),
+              task.projectUID != projectUID else { return false }
+        withAnimation(.easeOut(duration: 0.2)) { task.projectUID = projectUID }
+        draggingUID = nil
+        dropTarget = nil
+        return true
     }
 
     private func delete(_ p: Project) {
@@ -135,14 +135,16 @@ struct ProjectBar: View {
 
 private struct ProjectDropTarget: ViewModifier {
     let enabled: Bool
-    let onDrop: ([String]) -> Bool
+    let onDrop: () -> Bool
     let onTarget: (Bool) -> Void
 
     func body(content: Content) -> some View {
         if enabled {
-            content.dropDestination(for: String.self) { uids, _ in
-                onDrop(uids)
-            } isTargeted: { onTarget($0) }
+            // 载荷用不上(要拖的是谁由 draggingUID 记着),只关心落在哪个胶囊上
+            content.onDrop(
+                of: [.plainText, .utf8PlainText],
+                isTargeted: Binding(get: { false }, set: { onTarget($0) })
+            ) { _ in onDrop() }
         } else {
             content
         }

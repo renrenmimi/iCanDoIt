@@ -8,9 +8,16 @@ struct TodayView: View {
     var stats: Stats
     /// 在 Today 页新建的任务归到哪个板
     var activeProjectUID: String = ""
+    @Binding var draggingUID: String?
 
     @State private var showCelebration = false
     @State private var showAdd = false
+    @State private var editing: DayTask?
+    /// 每一行的纵向中点,用来算拖拽落点插到第几行
+    @State private var rowMidY: [String: CGFloat] = [:]
+    /// 插入指示线的位置;nil = 当前没在拖
+    @State private var dropIndex: Int?
+    @State private var watchdog = DragWatchdog()
 
     private var doneCount: Int { tasks.filter(\.isDone).count }
 
@@ -48,8 +55,17 @@ struct TodayView: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            AddTaskSheet { title, reward in
-                addTask(title: title, reward: reward)
+            TaskEditorSheet { title, reward, urgent in
+                addTask(title: title, reward: reward, urgent: urgent)
+            }
+        }
+        .sheet(item: $editing) { task in
+            TaskEditorSheet(task: task) { title, reward, urgent in
+                task.title = title
+                task.reward = reward
+                task.isUrgent = urgent
+            } onDelete: {
+                delete(task)
             }
         }
     }
@@ -135,7 +151,8 @@ struct TodayView: View {
             } else {
                 MaybeScroll(axis: .vertical) {
                     VStack(spacing: 10) {
-                        ForEach(displayTasks) { task in
+                        ForEach(Array(displayTasks.enumerated()), id: \.element.uid) { idx, task in
+                            if dropIndex == idx { InsertionLine() }
                             // 「已完成」小标题跟着第一条完成任务走,
                             // 保持单个 ForEach,打勾时行的下沉动画不断裂
                             VStack(alignment: .leading, spacing: 10) {
@@ -145,13 +162,46 @@ struct TodayView: View {
                                 TaskRow(
                                     task: task,
                                     onToggle: { toggle(task) },
-                                    onDelete: { delete(task) }
+                                    onDelete: { delete(task) },
+                                    onEdit: { editing = task }
                                 )
+                                .modifier(CardDraggable(
+                                    uid: task.uid, enabled: !Snapshot.offscreen
+                                ) { draggingUID = task.uid })
+                                .onGeometryChange(for: CGFloat.self) { proxy in
+                                    proxy.frame(in: .named("todayList")).midY
+                                } action: { midY in
+                                    rowMidY[task.uid] = midY
+                                }
                             }
                         }
+                        if dropIndex == displayTasks.count { InsertionLine() }
                     }
                     .padding(2)
                     .padding(.bottom, 12)
+                    // 整个列表一个放置目标,按落点决定插到第几行
+                    .frame(maxWidth: .infinity, minHeight: 200, alignment: .top)
+                    .coordinateSpace(.named("todayList"))
+                    .modifier(SlotDropModifier(
+                        enabled: !Snapshot.offscreen,
+                        delegate: SlotDropDelegate(
+                            column: "todayList",
+                            slotAt: { point in
+                                displayTasks.filter {
+                                    (rowMidY[$0.uid] ?? .greatestFiniteMagnitude) < point.y
+                                }.count
+                            },
+                            onHover: { s in
+                                withAnimation(.easeOut(duration: 0.12)) { dropIndex = s?.index }
+                                // 拖拽一旦结束(含被取消),指示线自己消失
+                                if s != nil {
+                                    watchdog.begin { clearDragState() }
+                                }
+                            },
+                            onExit: { _ in clearDragState() },
+                            onPerform: { index in reorder(displayIndex: index) }
+                        )
+                    ))
                 }
             }
         }
@@ -187,16 +237,47 @@ struct TodayView: View {
         }
     }
 
-    private func addTask(title: String, reward: String) {
+    private func addTask(title: String, reward: String, urgent: Bool) {
         guard !title.isEmpty else { return }
         let maxOrder = tasks.map(\.sortOrder).max() ?? -1
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            context.insert(DayTask(
+            let t = DayTask(
                 title: title, reward: reward,
                 bucketKey: BucketKey.day(.now), sortOrder: maxOrder + 1,
                 projectUID: activeProjectUID
-            ))
+            )
+            t.isUrgent = urgent
+            context.insert(t)
         }
+    }
+
+    /// 收起指示线
+    private func clearDragState() {
+        watchdog.cancel()
+        withAnimation(.easeOut(duration: 0.12)) { dropIndex = nil }
+    }
+
+    /// Today 列表内拖拽重排(单列,只改顺序)
+    private func reorder(displayIndex: Int) -> Bool {
+        guard let uid = draggingUID,
+              let task = tasks.first(where: { $0.uid == uid }) else { return false }
+
+        // 被拖的行自己占了个位:它原本在落点之上时,目标序号减一
+        var target = displayIndex
+        if let current = displayTasks.firstIndex(where: { $0.uid == uid }), current < displayIndex {
+            target -= 1
+        }
+
+        var moved = false
+        withAnimation(.easeOut(duration: 0.18)) {
+            moved = BoardMove.apply(moving: task, to: task.bucketKey, at: target, all: tasks)
+        }
+        if moved {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+        }
+        draggingUID = nil
+        clearDragState()
+        return moved
     }
 }
 
@@ -223,6 +304,7 @@ struct TaskRow: View {
     let task: DayTask
     var onToggle: () -> Void
     var onDelete: () -> Void
+    var onEdit: (() -> Void)?
 
     @State private var hovering = false
 
@@ -247,11 +329,21 @@ struct TaskRow: View {
             .help(task.isDone ? "Mark as not done" : "Mark as done")
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.title)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(task.isDone ? Theme.textSecondary : Theme.textPrimary)
-                    .strikethrough(task.isDone, color: Theme.textSecondary)
-                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    if task.isUrgent {
+                        Text("URGENT")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Theme.urgent.opacity(task.isDone ? 0.4 : 0.9), in: Capsule())
+                    }
+                    Text(task.title)
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundStyle(task.isDone ? Theme.textSecondary : Theme.textPrimary)
+                        .strikethrough(task.isDone, color: Theme.textSecondary)
+                        .lineLimit(2)
+                }
                 if !task.reward.isEmpty {
                     RewardChip(text: task.reward)
                 }
@@ -267,27 +359,60 @@ struct TaskRow: View {
             }
 
             // 常驻布局、只变透明度:悬停时不会挤动旁边的内容
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textSecondary)
+            HStack(spacing: 12) {
+                if let onEdit {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit this task")
+                }
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                .help("Delete")
             }
-            .buttonStyle(.plain)
-            .opacity(hovering ? 1 : 0)
-            .allowsHitTesting(hovering)
-            .help("Delete")
+            // 平时淡显、悬停变亮:入口始终可见,不用猜
+            .opacity(hovering ? 1 : 0.4)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
         .glassCard(cornerRadius: 14)
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(.white.opacity(hovering ? 0.15 : 0), lineWidth: 1)
+                .strokeBorder(
+                    task.isUrgent && !task.isDone
+                        ? Theme.urgent.opacity(hovering ? 0.7 : 0.45)
+                        : .white.opacity(hovering ? 0.15 : 0),
+                    lineWidth: 1
+                )
+        }
+        // 加急:左侧一道竖条
+        .overlay(alignment: .leading) {
+            if task.isUrgent {
+                Capsule()
+                    .fill(Theme.urgent.opacity(task.isDone ? 0.35 : 1))
+                    .frame(width: 3)
+                    .padding(.vertical, 10)
+                    .padding(.leading, 2)
+            }
         }
         .opacity(task.isDone ? 0.7 : 1)
         .animation(.easeOut(duration: 0.15), value: hovering)
         .onHover { hovering = $0 }
+        // 用 simultaneousGesture:普通 onTapGesture 会和 .draggable 抢事件
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded { onEdit?() }
+        )
         .contextMenu {
+            if let onEdit {
+                Button("Edit…", action: onEdit)
+            }
             if task.isDone {
                 Button("Mark as Not Done", action: onToggle)
             }
